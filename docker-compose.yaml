@@ -1,0 +1,110 @@
+services:
+  codex-base:
+    build:
+      context: .
+      dockerfile: bin/docker/base.Dockerfile
+      args:
+        CODEX_BASE_VERSION:
+    image: docker.io/ajslater/codex-base
+  codex-builder-base:
+    build:
+      context: .
+      dockerfile: bin/docker/builder-base.Dockerfile
+      args:
+        CODEX_BASE_VERSION:
+        CODEX_BUILDER_BASE_VERSION:
+    image: docker.io/ajslater/codex-builder-base
+  codex-dist-builder: &codex-dist-builder
+    build:
+      context: .
+      dockerfile: bin/docker/dist-builder.Dockerfile
+      args:
+        CODEX_BUILDER_BASE_VERSION:
+        CODEX_DIST_BUILDER_VERSION:
+    image: docker.io/ajslater/codex-dist-builder:$CODEX_DIST_BUILDER_VERSION
+    container_name: codex-dist-builder
+  codex-backend-lint:
+    <<: *codex-dist-builder
+    container_name: codex-backend-lint
+    command: make lint-backend
+  codex-frontend-lint:
+    <<: *codex-dist-builder
+    container_name: codex-frontent-lint
+    command: make lint-frontend
+  codex-frontend-test:
+    <<: *codex-dist-builder
+    container_name: codex-frontend-test
+    command: make test-frontend
+    volumes:
+      - ./test-results/:/app/test-results/
+  codex-frontend-build:
+    <<: *codex-dist-builder
+    container_name: codex-frontend-build
+    volumes:
+      - ./codex/static_build:/app/codex/static_build
+    command: make build-frontend
+  codex-backend-test:
+    <<: *codex-dist-builder
+    container_name: codex-backend-test
+    volumes:
+      - ./codex/static_build:/app/codex/static_build:ro
+      #- ./codex/static_root:/app/codex/static_root
+      - ./test-results/:/app/test-results/
+    command: make test-backend
+  codex-build-dist:
+    <<: *codex-dist-builder
+    container_name: codex-build-dist
+    volumes:
+      - ./codex/static_build:/app/codex/static_build:ro
+      - ./codex/static_root:/app/codex/static_root
+      - ./dist/:/app/dist/
+    command: make build
+  codex-arch:
+    build:
+      context: .
+      dockerfile: bin/docker/Dockerfile
+      args:
+        CODEX_BUILDER_BASE_VERSION:
+        CODEX_BASE_VERSION:
+        CODEX_BUILDER_FINAL_VERSION:
+        CODEX_WHEEL:
+        PKG_VERSION:
+    image: docker.io/ajslater/codex-arch
+    container_name: codex-arch
+  codex:
+    build:
+      context: .
+      dockerfile: bin/docker/Dockerfile
+    image: docker.io/ajslater/codex
+    container_name: codex
+    ports:
+      - "9810:9810"
+    volumes:
+      - ./config:/config
+      - ./comics:/comics:ro
+  codex-dev:
+    build:
+      context: .
+      dockerfile: bin/docker/dev.Dockerfile
+    image: codex-dev
+    mem_limit: 1g
+    container_name: codex-dev
+    environment:
+      - VITE_HOST=localhost
+    ports:
+      - "9810:9810"
+    volumes:
+      - .:/app
+      - /Users/aj/Comics:/comics
+    #init: true
+    command: tail -f /dev/null
+    #entrypoint: ["/sbin/tini", "--"]
+  codex-dev-old:
+    image: ajslater/codex:1.2.9
+    container_name: codex-dev-old
+    ports:
+      - "9810:9810"
+    volumes:
+      - ./config/old/:/config
+      - ./comics:/comics
+version: "3.8"
